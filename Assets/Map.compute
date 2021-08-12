@@ -1,0 +1,92 @@
+#pragma kernel CSMain
+
+struct Field {
+	float2 position;
+	float4 state;
+};
+
+RWStructuredBuffer<Field> sourceFields;
+RWStructuredBuffer<Field> targetFields;
+uint resolution;
+bool running;
+
+RWTexture2D<float4> targetTexture;
+
+bool IsLeftMost(uint id) {
+    return id % resolution == 0;
+}
+
+bool IsRightMost(uint id) {
+    return (id + 1) % resolution == 0;
+}
+
+bool IsTopMost(uint id) {
+    return id < resolution;
+}
+
+bool IsBottomMost(uint id) {
+    return id >= resolution * (resolution - 1);
+}
+
+[numthreads(32,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    Field field = sourceFields[id.x];
+    int fieldX = (int) field.position.x;
+	int fieldY = (int) field.position.y;
+
+    float state;
+    if (running) {
+        float count = 0;
+        
+        if (!IsRightMost(id.x) && sourceFields[id.x + 1].state.w == 1) {
+            count = count + 1;
+        }
+        if (!IsLeftMost(id.x) && sourceFields[id.x - 1].state.w == 1) {
+            count = count + 1;
+        }
+
+        if (!IsTopMost(id.x) && sourceFields[id.x - resolution].state.w == 1) {
+            count = count + 1;
+        }
+        if (!IsTopMost(id.x) && !IsRightMost(id.x) && sourceFields[id.x - resolution + 1].state.w == 1) {
+            count = count + 1;
+        }
+        if (!IsTopMost(id.x) && !IsLeftMost(id.x) && sourceFields[id.x - resolution - 1].state.w == 1) {
+            count = count + 1;
+        }
+
+        if (!IsBottomMost(id.x) && sourceFields[id.x + resolution].state.w == 1) {
+            count = count + 1;
+        }
+        if (!IsBottomMost(id.x) && !IsRightMost(id.x) && sourceFields[id.x + resolution + 1].state.w == 1) {
+            count = count + 1;
+        }
+        if (!IsBottomMost(id.x) && !IsLeftMost(id.x) && sourceFields[id.x + resolution  - 1].state.w == 1) {
+            count = count + 1;
+        }
+
+        state = field.state.w;
+        if (state == 0 && count == 3) {
+            state = 1;
+        } else if (state == 1) {
+            if (count <= 1) {
+                state = 0;
+            } else if (count >= 4) {
+                state = 0;
+            }
+        }
+
+        targetFields[id.x].state.w = state;
+    } else {
+        state = field.state.w;
+    }
+
+    if (state == 1) {
+        float4 texColor = field.state;
+        texColor.w = 1;
+        targetTexture[int2(fieldX, fieldY)] = texColor;
+    } else {
+        targetTexture[int2(fieldX, fieldY)] = 0;
+    }
+}
