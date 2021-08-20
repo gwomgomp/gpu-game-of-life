@@ -1,0 +1,1 @@
+Game Of Life implementation that runs on the GPU to allow for big maps
